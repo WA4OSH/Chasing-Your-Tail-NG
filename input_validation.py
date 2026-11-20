@@ -4,6 +4,7 @@ Prevents injection attacks and ensures data integrity
 """
 import re
 import json
+from cyt_config import load_legacy_config
 import logging
 from typing import Any, Optional, Dict, List
 from pathlib import Path
@@ -252,14 +253,8 @@ class SecureInputHandler:
                 logger.error(f"Config file not found: {config_path}")
                 return None
             
-            with open(config_path, 'r', encoding='utf-8') as f:
-                content = f.read()
-            
-            # Validate JSON structure
-            config = self.validator.validate_json_input(content)
-            if not config:
-                return None
-            
+            config = load_legacy_config(config_path)
+
             # Validate configuration structure
             if not self.validator.validate_config_structure(config):
                 return None

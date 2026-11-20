@@ -4,7 +4,9 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from cyt_config import ConfigError, load_config, normalize_config, parse_config, validate_config
+from cyt_config import (
+    ConfigError, load_config, load_legacy_config, normalize_config, parse_config, validate_config,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -151,7 +153,47 @@ class ConfigTests(unittest.TestCase):
         del self.document["api_keys"]
         self.document["schema_version"] = 2
         self.document["paths"]["ignore_lists"]["password"] = "private-value"
-        self.assertNotIn("private-value", str(self.assert_invalid("$.paths.ignore_lists.password")))
+        error = self.assert_invalid("$.paths.ignore_lists.password")
+        self.assertIn("unknown field", error.message)
+        self.assertNotIn("private-value", str(error))
+
+    def test_field_allowlist_does_not_classify_by_substring(self):
+        self.document["paths"]["log_dir"] = "./credentials-and-tokens/logs"
+        self.assertEqual(self.load().paths.log_dir, self.root / "credentials-and-tokens/logs")
+        secret_like_key = "tokenization_mode"
+        self.document[secret_like_key] = "example"
+        self.assertIn(secret_like_key, parse_config(json.dumps(self.document), self.source))
+        self.assertEqual(self.assert_invalid("$.tokenization_mode").message, "unknown field")
+
+    def test_path_provenance_preserves_written_values(self):
+        cwd = self.root / "launch"
+        self.document["paths"]["log_dir"] = "./output//logs"
+        self.document["paths"]["ignore_lists"]["mac"] = "./ignore_lists//mac.json"
+        config = self.load()
+        self.assertEqual(config.path_provenance.source, self.source)
+        self.assertEqual(config.path_provenance.log_dir, "./output//logs")
+        self.assertEqual(config.path_provenance.mac_ignore_list, "./ignore_lists//mac.json")
+        self.assertEqual(config.paths.log_dir, self.root / "output/logs")
+        self.assertEqual(config.paths.mac_ignore_list, self.root / "ignore_lists/mac.json")
+        self.assertEqual(load_config(self.source, working_dir=cwd), config)
+
+    def test_legacy_reader_guards_version_without_rewriting_paths(self):
+        self.load()
+        for version in (2, 3, True, 1.0):
+            self.document["schema_version"] = version
+            self.source.write_text(json.dumps(self.document), encoding="utf-8")
+            with self.subTest(version=version), self.assertRaisesRegex(ConfigError, "requires schema v1"):
+                load_legacy_config(self.source)
+        del self.document["schema_version"]
+        paths = self.document["paths"]
+        paths["log_dir"] = "./output//logs"
+        self.source.write_text(json.dumps(self.document), encoding="utf-8")
+        self.assertEqual(load_legacy_config(self.source)["paths"], paths)
+        self.document["api_keys"] = {"wigle": {"encoded_token": "old-token"}}
+        self.source.write_text(json.dumps(self.document), encoding="utf-8")
+        with self.assertRaisesRegex(ConfigError, "use migrate_credentials.py explicitly"):
+            load_legacy_config(self.source)
+        self.assertEqual(load_legacy_config(self.source, credential_migration=True), self.document)
 
     def test_missing_file_and_bad_encoding_report_filename(self):
         with self.assertRaisesRegex(ConfigError, "operator-config.json.*cannot read"):

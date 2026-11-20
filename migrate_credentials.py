@@ -4,6 +4,7 @@ Credential Migration Tool for CYT
 Migrates API keys from insecure config.json to encrypted storage
 """
 import json
+from cyt_config import load_legacy_config
 import sys
 import os
 from pathlib import Path
@@ -19,8 +20,7 @@ def main():
         sys.exit(1)
     
     # Load current config
-    with open(config_file, 'r') as f:
-        config = json.load(f)
+    config = load_legacy_config(config_file, credential_migration=True)
     
     # Check if there are credentials to migrate
     if 'api_keys' not in config:

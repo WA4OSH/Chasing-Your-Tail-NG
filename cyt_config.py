@@ -30,6 +30,15 @@ class ConfigPaths:
 
 
 @dataclass(frozen=True)
+class PathProvenance:
+    source: Path
+    log_dir: str
+    kismet_logs: str
+    mac_ignore_list: str
+    ssid_ignore_list: str
+
+
+@dataclass(frozen=True)
 class TrackingWindows:
     recent_minutes: float
     medium_minutes: float
@@ -58,16 +67,11 @@ class RuntimeConfig:
     paths: ConfigPaths
     timing: ConfigTiming
     search: BoundingBox | None
+    path_provenance: PathProvenance
 
 
 class _ObjectPairs(list):
     """Keep object members distinct from arrays until duplicates are checked."""
-
-
-_SECRET_KEY = re.compile(
-    r"secret|credential|password|passwd|passphrase|token|api.?keys?|private.?key|authorization",
-    re.IGNORECASE,
-)
 
 
 def _member_field(parent, key):
@@ -135,8 +139,6 @@ def parse_config(text: str, filename: str | Path) -> dict:
             result = {}
             for key, member in value:
                 member_field = _member_field(field, key)
-                if _SECRET_KEY.search(key):
-                    raise ConfigError(filename, member_field, "secret-bearing field is forbidden; store credentials separately")
                 if key in result:
                     raise ConfigError(filename, member_field, "duplicate key; keep one definition")
                 result[key] = unpack(member, member_field)
@@ -167,8 +169,8 @@ def validate_config(document: dict, filename: str | Path) -> RuntimeConfig:
         if not isinstance(value, dict):
             fail(field, "expected an object")
         for key in value:
-            if isinstance(key, str) and _SECRET_KEY.search(key):
-                fail(_member_field(field, key), "credentials belong outside config.json")
+            if field == "$" and key == "api_keys":
+                fail("$.api_keys", "credentials belong outside config.json")
             if key not in required and key not in optional:
                 fail(_member_field(field, key), "unknown field")
         for key in required:
@@ -206,11 +208,18 @@ def validate_config(document: dict, filename: str | Path) -> RuntimeConfig:
     if "base_dir" in paths:
         path(paths["base_dir"], "$.paths.base_dir")  # v1 accepted it but never used it
     lists = fields(paths["ignore_lists"], "$.paths.ignore_lists", ("mac", "ssid"))
-    config_paths = ConfigPaths(
-        Path(path(paths["log_dir"], "$.paths.log_dir")),
+    provenance = PathProvenance(
+        Path(filename),
+        path(paths["log_dir"], "$.paths.log_dir"),
         path(paths["kismet_logs"], "$.paths.kismet_logs"),
-        Path(path(lists["mac"], "$.paths.ignore_lists.mac")),
-        Path(path(lists["ssid"], "$.paths.ignore_lists.ssid")),
+        path(lists["mac"], "$.paths.ignore_lists.mac"),
+        path(lists["ssid"], "$.paths.ignore_lists.ssid"),
+    )
+    config_paths = ConfigPaths(
+        Path(provenance.log_dir),
+        provenance.kismet_logs,
+        Path(provenance.mac_ignore_list),
+        Path(provenance.ssid_ignore_list),
     )
 
     if version == 1:
@@ -258,22 +267,24 @@ def validate_config(document: dict, filename: str | Path) -> RuntimeConfig:
             fail("$.search.lat_max", "must be greater than lat_min")
         if search.lon_min >= search.lon_max:
             fail("$.search.lon_max", "must be greater than lon_min")
-    return RuntimeConfig(version, config_paths, config_timing, search)
+    return RuntimeConfig(version, config_paths, config_timing, search, provenance)
 
 
 def normalize_config(config: RuntimeConfig, *, filename: Path, working_dir: Path) -> RuntimeConfig:
     """Anchor paths using explicit inputs without consulting or changing the filesystem."""
     if not working_dir.is_absolute():
         raise ValueError("working_dir must be absolute")
-    base = (working_dir / filename).parent if config.schema_version == 2 else working_dir
+    source = working_dir / filename
+    base = source.parent if config.schema_version == 2 else working_dir
     list_base = base / "ignore_lists" if config.schema_version == 1 else base
-    paths = config.paths
-    return replace(config, paths=ConfigPaths(
-        base / paths.log_dir,
-        os.path.join(base, paths.kismet_logs),
-        list_base / paths.mac_ignore_list,
-        list_base / paths.ssid_ignore_list,
-    ))
+    original = config.path_provenance
+    paths = ConfigPaths(
+        base / original.log_dir,
+        os.path.join(base, original.kismet_logs),
+        list_base / original.mac_ignore_list,
+        list_base / original.ssid_ignore_list,
+    )
+    return replace(config, paths=paths, path_provenance=replace(original, source=source))
 
 
 def load_config(filename: str | Path = "config.json", *, working_dir: Path | None = None) -> RuntimeConfig:
@@ -297,3 +308,20 @@ def load_config(filename: str | Path = "config.json", *, working_dir: Path | Non
     except ConfigError as error:
         raise _locate_error(text, error) from None
     return normalize_config(validated, filename=source, working_dir=working_dir)
+
+
+def load_legacy_config(filename: str | Path = "config.json", *, credential_migration=False) -> dict:
+    """Read a v1 dictionary for legacy callers that own their path semantics."""
+    source = Path(filename)
+    text = source.read_text(encoding="utf-8")
+    document = parse_config(text, source)
+    version = document.get("schema_version", 1)
+    if type(version) is not int or version != 1:
+        error = ConfigError(source, "$.schema_version",
+                            "this command requires schema v1; use a v1 configuration")
+        raise _locate_error(text, error)
+    if "api_keys" in document and not credential_migration:
+        error = ConfigError(source, "$.api_keys",
+                            "credentials belong outside config.json; use migrate_credentials.py explicitly")
+        raise _locate_error(text, error)
+    return document

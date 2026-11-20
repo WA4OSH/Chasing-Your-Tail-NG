@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cyt_config import load_legacy_config
 from input_validation import InputValidator
 
 logger = logging.getLogger(__name__)
@@ -170,40 +171,10 @@ class SecureCredentialManager:
         return self.get_credential('wigle', 'encoded_token')
 
 
-def secure_config_loader(config_path: str = 'config.json') -> Dict[str, Any]:
-    """
-    Load configuration with secure credential handling
-    Automatically migrates insecure credentials to secure storage
-    """
-    with open(config_path, 'r') as f:
-        config = json.load(f)
-    
-    # Initialize credential manager
-    cred_manager = SecureCredentialManager()
-    
-    # Check if we need to migrate credentials
-    if 'api_keys' in config:
-        api_keys = config['api_keys']
-        
-        # Check for insecure API keys in config
-        if any('token' in str(api_keys).lower() or 'key' in str(api_keys).lower() 
-               for key in api_keys.values() if isinstance(key, dict)):
-            
-            logger.warning("Found API keys in config file - initiating secure migration")
-            cred_manager.migrate_from_config(config)
-            
-            # Remove API keys from config (they're now stored securely)
-            config.pop('api_keys', None)
-            
-            # Create sanitized config file
-            sanitized_config_path = config_path.replace('.json', '_sanitized.json')
-            with open(sanitized_config_path, 'w') as f:
-                json.dump(config, f, indent=2)
-            
-            print(f"✅ Created sanitized config file: {sanitized_config_path}")
-            print("⚠️  Please replace your config.json with the sanitized version")
-    
-    return config, cred_manager
+def secure_config_loader(config_path: str = 'config.json') -> tuple[dict, SecureCredentialManager]:
+    """Read legacy settings, then construct the existing credential provider."""
+    config = load_legacy_config(config_path)
+    return config, SecureCredentialManager()
 
 
 def get_environment_credentials() -> Dict[str, str]:

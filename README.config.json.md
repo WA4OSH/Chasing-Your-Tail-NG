@@ -2,8 +2,7 @@
 
 Phase 2A provides the configuration API for future legacy entry-point integration. Use
 `sample.config.json` as the starting point for a new schema v2 configuration. Keep the
-operator's `config.json` local. Existing legacy commands still use their original readers
-and require their existing v1 file layout. Keep that file in place while testing v2 with
+operator's `config.json` local. Legacy commands keep their v1 file layout and explicitly reject v2. Keep that file in place while testing v2 with
 an explicit filename. If your checkout predates the removal of tracked `config.json`,
 back up your operator copy outside the checkout before switching to or pulling a
 revision that removes it from Git, then restore it locally. The `cyt_core` commands continue to use their CLI options directly.
@@ -26,7 +25,9 @@ The v2 validator requires those values to be explicit. All objects reject unknow
 | `search` | Optional WiGLE enrichment bounding box. If present, supply all four finite decimal degree fields, `lat_min`, `lat_max`, `lon_min`, and `lon_max`. Latitude is in −90 to 90 and longitude in −180 to 180, inclusive. Each minimum must be less than its maximum. Antimeridian-crossing boxes and polygons are unsupported. Phase 2A does not apply this setting to runtime behavior. |
 
 Credentials belong outside the configuration file. The API rejects credential fields,
-including the legacy `api_keys` tree, in both versions. Keep secrets in the credential
+including the legacy `api_keys` tree, in both versions through an explicit field allowlist.
+The legacy `api_keys` field can be read only through the explicit credential migration
+command. Startup does not migrate credentials. Keep secrets in the credential
 provider and out of paths and other ordinary string values. JSON must be UTF-8 and contain
 a single object. Duplicate object keys, non-finite numbers, unsupported versions, and
 incorrect types are rejected. Booleans are distinct from numbers. Diagnostics identify
@@ -40,7 +41,10 @@ of the filename passed to the loader, including both ignore-list paths. The load
 path used to open the config, including when it names a symlink. It does not expand home
 or environment variables, glob, check for existing capture files, or create directories.
 Relative config filenames use the explicit working directory supplied to the loader, or
-the launch working directory by default.
+the launch working directory by default. `settings.path_provenance` provides the
+config source and exact decoded path strings as written in that file. The matching
+fields in `settings.paths` provide the resolved runtime paths. For example, a missing
+capture diagnostic can show the source file, original glob, and resolved glob.
 
 An omitted `schema_version` or integer `1` selects v1. Relative capture and log paths use
 the launch working directory. Relative ignore filenames use its `ignore_lists/` directory.
@@ -67,3 +71,15 @@ settings = load_config("sample.config.json")
 `validate_config` constructs frozen typed settings, and `normalize_config` resolves
 their paths using explicit inputs. These three steps do not access the filesystem.
 Subsystem initialization belongs to the caller.
+
+
+## Architectural invariants
+
+- **ARCH-002 — Instrument connections preserve instrument state.** Connecting to an
+  instrument must not implicitly initialize, reset, or reconfigure it. Those changes
+  require an explicit operation authorized by the caller.
+- **ARCH-003 — Construction, configuration loading, and inspection preserve operational state.**
+  These actions must not implicitly perform destructive initialization or operational
+  transitions. Keep configuration validation separate from operational readiness checks.
+  A valid configuration can name a capture path that does not yet exist. Check availability,
+  permissions, or device state explicitly in the operational layer.
