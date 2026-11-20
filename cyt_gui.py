@@ -6,6 +6,7 @@ Maintains Fisher Price usability for small screens while looking professional
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import subprocess
+from monitor_detection import get_monitor_interfaces
 import os
 import pathlib
 import sqlite3
@@ -400,16 +401,20 @@ class CYTGui:
             else:
                 self.log_message("❌ Kismet is not running")
             
-            # Check monitor mode
+            # Check monitor mode using modern Linux wireless tools
             try:
-                iwconfig_result = subprocess.run(['iwconfig'], capture_output=True, text=True, timeout=5)
-                if "Mode:Monitor" in iwconfig_result.stdout:
-                    self.log_message("✅ Monitor mode detected")
+                interfaces = get_monitor_interfaces()
+                if interfaces is None:
+                    self.log_message("WARNING: Could not check monitor mode (iw unavailable or failed)")
+                elif interfaces:
+                    self.log_message(
+                        f"Monitor mode detected: {', '.join(interfaces)}"
+                    )
                 else:
-                    self.log_message("❌ Monitor mode not detected")
+                    self.log_message("No monitor interface detected")
             except Exception as e:
-                self.log_message(f"⚠️ Could not check monitor mode: {e}")
-                
+                self.log_message(f"ERROR checking monitor mode: {e}")
+
             self.update_status()
         except Exception as e:
             self.log_message(f"❌ Error running status check: {e}")
