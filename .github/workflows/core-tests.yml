@@ -1,7 +1,7 @@
 name: Observation core
 on:
   push:
-    branches: [main, codex/cyt-observation-core, codex/config-schema-v2]
+    branches: [main, codex/cyt-observation-core]
   pull_request:
 permissions:
   contents: read
