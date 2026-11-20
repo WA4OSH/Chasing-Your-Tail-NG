@@ -26,12 +26,9 @@ Chasing Your Tail (CYT) is a Wi-Fi probe request analyzer that monitors and trac
 5. Post-analysis tool can query WiGLE API for SSID geolocation data
 
 ### Configuration System
-All paths, API keys, and timing parameters are centralized in `config.json`:
-- Kismet database path pattern
-- Log and ignore list directories  
-- WiGLE API credentials
-- Time window configurations
-- Geographic search boundaries
+See [the configuration contract](README.config.json.md) for the local legacy
+configuration and the schema v2 foundation. Configuration files contain no secrets.
+The core CLI uses its own arguments.
 
 ## Common Development Commands
 

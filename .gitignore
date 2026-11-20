@@ -53,3 +53,6 @@ demo-observations*.jsonl
 .DS_Store
 Thumbs.db
 .review-data/
+
+# Operator configuration
+/config.json
