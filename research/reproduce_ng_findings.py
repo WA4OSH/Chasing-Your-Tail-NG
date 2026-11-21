@@ -105,9 +105,13 @@ def main():
         assert output.getvalue() == ""
         results["lowercase_recurrence_missed"] = True
 
-        config = json.loads((ROOT / "config.json").read_text())
-        missing = [name for name in config["paths"]["ignore_lists"].values()
-                   if not (ROOT / "ignore_lists" / name).exists()]
+        # Reproduce the historical filename mismatch without reading operator settings.
+        legacy_names = ("mac_list.py", "ssid_list.py")
+        ignore_dir = Path(temp) / "ignore_lists"
+        ignore_dir.mkdir()
+        for name in legacy_names:
+            (ignore_dir / Path(name).with_suffix(".json")).write_text("[]", encoding="utf-8")
+        missing = [name for name in legacy_names if not (ignore_dir / name).exists()]
         assert sorted(missing) == ["mac_list.py", "ssid_list.py"]
         results["configured_ignore_files_missing"] = missing
         assert not InputValidator.validate_ssid("Alice's WiFi")

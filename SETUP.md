@@ -10,7 +10,7 @@ pip3 install -r requirements.txt
 ### 2. Security Setup (REQUIRED)
 ```bash
 # Migrate credentials to secure storage
-python3 migrate_credentials.py
+python3 migrate_credentials.py --destination config_secure.json
 
 # Verify security hardening
 python3 chasing_your_tail.py
@@ -18,12 +18,9 @@ python3 chasing_your_tail.py
 ```
 
 ### 3. Configuration
-Edit `config.json` with your Kismet database path:
-```json
-{
-  "kismet_db_path": "/path/to/your/kismet/*.kismet"
-}
-```
+For the legacy commands below, set `paths.kismet_logs` in your local v1
+`config.json`. See [the configuration contract](README.config.json.md) for the
+v1 field names and the new v2 sample.
 
 ### 4. Run Analysis
 ```bash

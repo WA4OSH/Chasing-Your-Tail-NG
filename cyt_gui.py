@@ -11,6 +11,7 @@ import pathlib
 import sqlite3
 import glob
 import json
+from cyt_config import ConfigError, load_legacy_config
 import time
 import threading
 from datetime import datetime
@@ -365,10 +366,11 @@ class CYTGui:
         """Check if Kismet database exists and is accessible"""
         if not self.config:
             try:
-                with open('config.json', 'r') as f:
-                    self.config = json.load(f)
-            except:
+                self.config = load_legacy_config()
+            except FileNotFoundError:
                 self.config = {}
+            except (ConfigError, OSError, UnicodeError) as error:
+                return None, str(error)
         
         db_path = self.config.get('paths', {}).get('kismet_logs', '/tmp/kismet*.kismet')
         list_of_files = glob.glob(db_path)

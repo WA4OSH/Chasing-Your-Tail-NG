@@ -26,12 +26,9 @@ Chasing Your Tail (CYT) is a Wi-Fi probe request analyzer that monitors and trac
 5. Post-analysis tool can query WiGLE API for SSID geolocation data
 
 ### Configuration System
-All paths, API keys, and timing parameters are centralized in `config.json`:
-- Kismet database path pattern
-- Log and ignore list directories  
-- WiGLE API credentials
-- Time window configurations
-- Geographic search boundaries
+See [the configuration contract](README.config.json.md) for the local legacy
+configuration and the schema v2 foundation. Configuration files contain no secrets.
+The core CLI uses its own arguments.
 
 ## Common Development Commands
 
@@ -41,7 +38,7 @@ All paths, API keys, and timing parameters are centralized in `config.json`:
 pip3 install -r requirements.txt
 
 # Migrate credentials from insecure config.json (if needed)
-python3 migrate_credentials.py
+python3 migrate_credentials.py --destination config_secure.json
 
 # Verify security hardening
 python3 chasing_your_tail.py
@@ -242,4 +239,4 @@ Advanced persistence detection algorithms analyze device behavior patterns:
 - Failed validation attempts are tracked
 - Database errors are monitored
 
-**⚠️ IMPORTANT: Run `python3 migrate_credentials.py` before first use to secure your API keys!**
+**⚠️ IMPORTANT: Run `python3 migrate_credentials.py --destination config_secure.json` before first use to secure your API keys!**

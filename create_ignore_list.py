@@ -1,12 +1,12 @@
 import sqlite3
 import glob
 import json
+from cyt_config import load_legacy_config
 import os
 import pathlib
 
 # Load config
-with open('config.json', 'r') as f:
-    config = json.load(f)
+config = load_legacy_config()
 
 ### Check for/make subdirectories for logs, ignore lists etc.
 cyt_sub = pathlib.Path('./ignore_lists')

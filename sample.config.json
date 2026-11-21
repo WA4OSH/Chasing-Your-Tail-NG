@@ -1,0 +1,21 @@
+{
+  "schema_version": 2,
+  "paths": {
+    "log_dir": "logs",
+    "kismet_logs": "kismet_logs/*.kismet",
+    "ignore_lists": {
+      "mac": "ignore_lists/mac_list.json",
+      "ssid": "ignore_lists/ssid_list.json"
+    }
+  },
+  "timing": {
+    "poll_interval_seconds": 60,
+    "tracking_list_rotation_cycles": 5,
+    "time_windows": {
+      "recent_minutes": 5,
+      "medium_minutes": 10,
+      "old_minutes": 15,
+      "oldest_minutes": 20
+    }
+  }
+}

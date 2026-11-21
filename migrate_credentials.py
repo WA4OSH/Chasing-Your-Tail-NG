@@ -1,77 +1,82 @@
 #!/usr/bin/env python3
-"""
-Credential Migration Tool for CYT
-Migrates API keys from insecure config.json to encrypted storage
-"""
+"""Explicitly migrate a legacy WiGLE token and publish sanitized configuration."""
+
+import argparse
 import json
-import sys
 import os
 from pathlib import Path
-from secure_credentials import SecureCredentialManager
+import tempfile
 
-def main():
-    print("🔐 CYT Credential Migration Tool")
-    print("=" * 50)
-    
-    config_file = 'config.json'
-    if not Path(config_file).exists():
-        print(f"❌ Error: {config_file} not found")
-        sys.exit(1)
-    
-    # Load current config
-    with open(config_file, 'r') as f:
-        config = json.load(f)
-    
-    # Check if there are credentials to migrate
-    if 'api_keys' not in config:
-        print("✅ No API keys found in config.json - already secure!")
-        return
-    
-    api_keys = config['api_keys']
-    if not any('token' in str(value).lower() or 'key' in str(value).lower() 
-              for value in api_keys.values() if isinstance(value, dict)):
-        print("✅ No credentials found to migrate")
-        return
-    
-    print("⚠️  Found API keys in config.json - this is a security risk!")
-    print("🔒 Migrating to encrypted storage...")
-    
-    # Initialize credential manager
-    cred_manager = SecureCredentialManager()
-    
-    # Migrate WiGLE credentials
-    if 'wigle' in api_keys:
-        wigle_config = api_keys['wigle']
-        if 'encoded_token' in wigle_config:
-            print("\n📡 Migrating WiGLE API token...")
-            cred_manager.store_credential('wigle', 'encoded_token', wigle_config['encoded_token'])
-            print("✅ WiGLE API token stored securely")
-    
-    # Remove API keys from config
-    config_backup = config.copy()
-    config.pop('api_keys', None)
-    
-    # Create backup of original config
-    backup_file = 'config_backup.json'
-    with open(backup_file, 'w') as f:
-        json.dump(config_backup, f, indent=2)
-    print(f"💾 Original config backed up to: {backup_file}")
-    
-    # Save sanitized config
-    sanitized_file = 'config_secure.json'
-    with open(sanitized_file, 'w') as f:
-        json.dump(config, f, indent=2)
-    print(f"🛡️  Sanitized config saved to: {sanitized_file}")
-    
-    print("\n🔐 Migration Complete!")
-    print("=" * 50)
-    print("Next steps:")
-    print("1. Review the sanitized config: config_secure.json")
-    print("2. Replace config.json with config_secure.json:")
-    print("   mv config_secure.json config.json")
-    print("3. Securely delete the backup if not needed:")
-    print("   shred -vfz-3 config_backup.json")
-    print("\n⚠️  IMPORTANT: Your API keys are now encrypted and require a master password!")
+from cyt_config import load_legacy_config
 
-if __name__ == '__main__':
+
+def migrate_credentials(source: Path, destination: Path) -> bool:
+    """Return whether a token was migrated, leaving the source untouched."""
+    # lstat also detects a dangling destination symlink.
+    try:
+        destination.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if destination.exists() and destination.samefile(source):
+            raise ValueError("destination refers to the source configuration")
+        raise FileExistsError(f"destination already exists: {destination}")
+
+    config = load_legacy_config(source, credential_migration=True)
+    if "api_keys" not in config:
+        return False
+
+    api_keys = config.pop("api_keys")
+    if not isinstance(api_keys, dict) or api_keys.keys() != {"wigle"}:
+        raise ValueError("only api_keys.wigle.encoded_token can be migrated")
+    wigle = api_keys["wigle"]
+    if not isinstance(wigle, dict) or wigle.keys() != {"encoded_token"}:
+        raise ValueError("only api_keys.wigle.encoded_token can be migrated")
+    token = wigle["encoded_token"]
+    if not isinstance(token, str) or not token.strip():
+        raise ValueError("api_keys.wigle.encoded_token must be a nonblank string")
+
+    # Stage only sanitized data, in the destination directory so publishing
+    # can use an atomic hard link that refuses to replace an existing entry.
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=destination.parent,
+            prefix=".cyt-migration-", delete=False,
+        ) as output:
+            temporary = Path(output.name)
+            json.dump(config, output, indent=2, allow_nan=False)
+            output.write("\n")
+            output.flush()
+            os.fsync(output.fileno())
+
+        from secure_credentials import SecureCredentialManager
+
+        SecureCredentialManager().store_credential("wigle", "encoded_token", token)
+        os.link(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink()
+
+    return True
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--destination", required=True, type=Path,
+                        help="new file for sanitized configuration")
+    args = parser.parse_args(argv)
+    try:
+        migrated = migrate_credentials(Path("config.json"), args.destination)
+    except (OSError, ValueError, RuntimeError) as error:
+        parser.exit(1, f"Migration failed: {error}\n")
+
+    if migrated:
+        print(f"Sanitized configuration saved to {args.destination}.")
+        print("Review it before replacing your original config.json.")
+    else:
+        print("No api_keys field found. No output was created.")
+
+
+if __name__ == "__main__":
     main()
