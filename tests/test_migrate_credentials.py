@@ -57,15 +57,18 @@ class CredentialMigrationTests(unittest.TestCase):
             self.destination.symlink_to(self.source)
         except (OSError, NotImplementedError) as error:
             self.skipTest(f"symlinks unavailable: {error}")
+        source_target = self.destination.readlink()
         with self.assertRaisesRegex(ValueError, "refers to the source"):
             migrate_credentials(self.source, self.destination)
-        self.assertTrue(self.destination.is_symlink())
+        self.assertEqual(self.destination.readlink(), source_target)
         self.destination.unlink()
         missing = self.root / "missing.json"
         self.destination.symlink_to(missing)
+        dangling_target = self.destination.readlink()
         with self.assertRaises(FileExistsError):
             migrate_credentials(self.source, self.destination)
-        self.assertEqual(self.destination.readlink(), missing)
+        self.assertEqual(self.destination.readlink(), dangling_target)
+        self.assertFalse(missing.exists())
         self.manager.store_credential.assert_not_called()
         self.assert_files(self.destination)
 
