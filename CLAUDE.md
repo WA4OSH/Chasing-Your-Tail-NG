@@ -38,7 +38,7 @@ The core CLI uses its own arguments.
 pip3 install -r requirements.txt
 
 # Migrate credentials from insecure config.json (if needed)
-python3 migrate_credentials.py
+python3 migrate_credentials.py --destination config_secure.json
 
 # Verify security hardening
 python3 chasing_your_tail.py
@@ -239,4 +239,4 @@ Advanced persistence detection algorithms analyze device behavior patterns:
 - Failed validation attempts are tracked
 - Database errors are monitored
 
-**⚠️ IMPORTANT: Run `python3 migrate_credentials.py` before first use to secure your API keys!**
+**⚠️ IMPORTANT: Run `python3 migrate_credentials.py --destination config_secure.json` before first use to secure your API keys!**

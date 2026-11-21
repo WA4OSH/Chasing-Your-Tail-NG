@@ -34,6 +34,23 @@ incorrect types are rejected. Booleans are distinct from numbers. Diagnostics id
 the filename and field. Syntax errors include line and column, and field errors from
 `load_config` point to the key or enclosing object when the key is missing.
 
+## Legacy credential migration
+
+From the directory containing your legacy `config.json`, run:
+
+```sh
+python3 migrate_credentials.py --destination config_secure.json
+```
+
+Choose a new destination in an existing directory on a filesystem that supports
+hard links. Migration transfers `api_keys.wigle.encoded_token` to the encrypted
+credential store and publishes a sanitized copy. It rejects existing destinations,
+including symlinks, and preserves the original `config.json` byte for byte. The
+original still contains the token, so keep it private while reviewing the sanitized
+file before replacing it. If publishing fails after credential storage succeeds,
+the encrypted token may already be stored. The original config is available for
+retry with a new destination.
+
 ## Paths and legacy compatibility
 
 Absolute paths keep their existing base. In v2, relative paths are based on the directory

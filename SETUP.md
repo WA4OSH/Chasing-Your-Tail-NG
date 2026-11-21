@@ -10,7 +10,7 @@ pip3 install -r requirements.txt
 ### 2. Security Setup (REQUIRED)
 ```bash
 # Migrate credentials to secure storage
-python3 migrate_credentials.py
+python3 migrate_credentials.py --destination config_secure.json
 
 # Verify security hardening
 python3 chasing_your_tail.py
